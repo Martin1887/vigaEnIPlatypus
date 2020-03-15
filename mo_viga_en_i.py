@@ -79,7 +79,7 @@ if __name__ == "__main__":
 
     with ProcessPoolEvaluator(cpu_count()) as evaluator:
         results = experiment(algorithms, problems,
-                             nfe=10000, evaluator=evaluator)
+                             nfe=100000, evaluator=evaluator)
 
     # Pareto front per algorithm in 2D
     fig = plt.figure()
@@ -89,8 +89,10 @@ if __name__ == "__main__":
         ax = fig.add_subplot(2, 7, i+1)
         ax.set_axisbelow(True)
         ax.grid()
-        ax.scatter([s.objectives[0] for s in result],
-                   [s.objectives[1] for s in result])
+        # Some results may not obey the restrictions, as Platypus docs say
+        feasible = [s for s in result if s.feasible]
+        ax.scatter([s.objectives[0] for s in feasible],
+                   [s.objectives[1] for s in feasible])
 
         ax.set_xlabel('área (cm2)')
         ax.set_ylabel('deflexión (cm)')
@@ -106,19 +108,42 @@ if __name__ == "__main__":
 
     point_type = ['r.', 'bx', 'g^', 'cs', 'm+', 'k1', 'vy',
                   'y.', 'rx', 'gv', 'ks', 'g+', 'r1', 'vb']
+    annotated_x = set()
+    annotated_y = set()
     for i, algorithm in enumerate(six.iterkeys(results)):
         result = results[algorithm]["VigaEnI"][0]
 
-        plt.plot([s.objectives[0] for s in result],
-                 [s.objectives[1] for s in result], point_type[i], label=algorithm)
+        # Some results may not obey the restrictions, as Platypus docs say
+        feasible = [s for s in result if s.feasible]
+        plt.plot([s.objectives[0] for s in feasible],
+                 [s.objectives[1] for s in feasible], point_type[i], label=algorithm)
+
+        for j, s in enumerate(feasible):
+            # Only annotate point if no annotation near to avoid collisions
+            if round(s.objectives[0], 0) not in annotated_x and \
+               round(s.objectives[1], 1) not in annotated_y:
+                label = '({}; {}; {}; {})'\
+                    .format(round(s.variables[0], 2),
+                            round(s.variables[1], 2),
+                            round(s.variables[2], 2),
+                            round(s.variables[3], 2))
+                if s.objectives[1] > 0.025:
+                    x_offset = s.objectives[0] + 10
+                    y_offset = s.objectives[1]
+                else:
+                    x_offset = s.objectives[0]
+                    y_offset = s.objectives[1] + 0.1 + \
+                        0.02 * len(annotated_x) / 100
+                plt.annotate(label, (s.objectives[0], s.objectives[1]),
+                             xytext=(x_offset, y_offset))
+                if s.objectives[1] < 0.025:
+                    for x in range(-50, 50):
+                        annotated_x.add(round(s.objectives[0], 0) + x)
+                else:
+                    annotated_y.add(round(s.objectives[1], 1))
 
     plt.xlabel('área (cm2)')
     plt.ylabel('deflexión (cm)')
     plt.title('Todos los algoritmos')
     plt.legend(loc='upper right')
-    for s in result:
-        label = 'x1={}, x2={}, x3={}, x4={}'\
-            .format(s.variables[0], s.variables[1], s.variables[2], s.variables[3])
-        plt.annotate(label, (s.objectives[0], s.objectives[1]))
-
     plt.show()
